@@ -317,7 +317,9 @@
             message.classList.remove('show');
             
             try {
-                const response = await fetch('/api/convert', {
+                // On Vercel, python function is mounted at /api/index
+                // so the convert endpoint resolves at /api/index/convert
+                const response = await fetch('/api/index/convert', {
                     method: 'POST',
                     body: formData
                 });

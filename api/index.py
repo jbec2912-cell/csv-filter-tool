@@ -179,6 +179,8 @@ def index():
 # So the browser should call /api/convert, and Flask should register /convert here.
 @app.route("/convert", methods=["POST"])
 @app.route("/api/convert", methods=["POST"])
+@app.route("/index/convert", methods=["POST"])
+@app.route("/api/index/convert", methods=["POST"])
 def api_convert():
     if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400
