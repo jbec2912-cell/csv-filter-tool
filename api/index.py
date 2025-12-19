@@ -168,6 +168,9 @@ def convert_csv(file_content: str) -> str:
 
 
 @app.route("/")
+@app.route("/api")
+@app.route("/index")
+@app.route("/api/index")
 def index():
     return render_template("index.html")
 
@@ -175,6 +178,7 @@ def index():
 # On Vercel, requests arrive at /api/*, and Flask sees the path without the /api prefix.
 # So the browser should call /api/convert, and Flask should register /convert here.
 @app.route("/convert", methods=["POST"])
+@app.route("/api/convert", methods=["POST"])
 def api_convert():
     if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400
