@@ -6,9 +6,13 @@ import re
 from datetime import datetime
 from io import StringIO, BytesIO
 from flask import Flask, render_template, request, send_file, jsonify
+import os
 from typing import Dict, Tuple
 
-app = Flask(__name__)
+# When running under Vercel, this file lives in api/, but templates/ is at project root.
+# Point Flask to the correct templates directory explicitly.
+TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "..", "templates")
+app = Flask(__name__, template_folder=TEMPLATES_DIR)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 PHONE_PRIORITY = ("C", "H", "W", "B")
@@ -168,7 +172,9 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/api/convert", methods=["POST"])
+# On Vercel, requests arrive at /api/*, and Flask sees the path without the /api prefix.
+# So the browser should call /api/convert, and Flask should register /convert here.
+@app.route("/convert", methods=["POST"])
 def api_convert():
     if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400

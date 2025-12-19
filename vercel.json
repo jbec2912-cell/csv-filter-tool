@@ -5,6 +5,9 @@
       "maxDuration": 60
     }
   },
+  "rewrites": [
+    { "source": "/", "destination": "/api" }
+  ],
   "env": {
     "PYTHON_VERSION": "3.11"
   }
