@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Convert Next_Day Service Appointment CSV to 19decapp format."""
+"""Convert Next_Day Service Appointment CSV to the 19decapp format."""
 
 import csv
 import re
 import sys
 from datetime import datetime
+from io import StringIO
 from pathlib import Path
 from typing import Dict, Tuple
 
-OUTPUT_NAME = "11 Ready.csv"
+OUTPUT_NAME = "11_Ready.csv"
 PHONE_PRIORITY = ("C", "H", "W", "B")
 
 
@@ -40,30 +41,27 @@ def split_name(full: str) -> Tuple[str, str]:
 
 
 def parse_vehicle(vehicle: str) -> Tuple[str, str, str]:
-    """Return (year_2digit, make, model) from the vehicle string.
-    
-    E.g., "2019 Toyota Tacoma" -> ("19", "Toyota", "Tacoma")
-    """
+    """Return (year_2digit, make, model) from the vehicle string."""
     if not vehicle or len(vehicle) < 5:
         return "", "", ""
-    
+
     parts = vehicle.split()
     if len(parts) < 2:
         return "", "", ""
-    
+
     year_candidate = parts[0]
     if not year_candidate.isdigit() or len(year_candidate) != 4:
         return "", "", ""
-    
-    year_2digit = year_candidate[-2:]  # Last 2 digits only
-    make = parts[1]  # Second part is the make (Toyota, Honda, etc.)
-    model = " ".join(parts[2:]) if len(parts) > 2 else ""  # Rest is model
-    
+
+    year_2digit = year_candidate[-2:]
+    make = parts[1]
+    model = " ".join(parts[2:]) if len(parts) > 2 else ""
+
     return year_2digit, make, model
 
 
 def parse_datetime(dt_str: str) -> Tuple[str, str]:
-    """Split CRM datetime into (Appointment, Time)."""
+    """Split CRM datetime into (Appointment, Time) without the year in Appointment."""
     if not dt_str:
         return "", ""
     try:
@@ -76,22 +74,11 @@ def parse_datetime(dt_str: str) -> Tuple[str, str]:
     return appointment, time_24h
 
 
-def main() -> None:
-    if len(sys.argv) != 2:
-        print("Usage: python convert_appointment.py /path/to/Next_Day_Service_Appointment-*.csv")
-        sys.exit(1)
+def convert_content(file_content: str) -> Tuple[str, int]:
+    """Convert raw CSV text into the target CSV string and return row count."""
+    reader = csv.reader(file_content.splitlines())
+    all_rows = list(reader)
 
-    src_path = Path(sys.argv[1]).expanduser()
-    if not src_path.is_file():
-        print(f"Source file not found: {src_path}")
-        sys.exit(1)
-
-    # Read CSV using Python's csv module (handles multiline quoted fields)
-    with src_path.open("r", encoding="utf-8-sig") as f:
-        reader = csv.reader(f)
-        all_rows = list(reader)
-
-    # Find header row
     header_idx = -1
     for i, row in enumerate(all_rows):
         if len(row) > 0 and "Customer" in row[0]:
@@ -99,31 +86,25 @@ def main() -> None:
             break
 
     if header_idx == -1:
-        print("Could not find CSV header row")
-        sys.exit(1)
+        raise ValueError("Could not find CSV header row")
 
     headers = all_rows[header_idx]
     data_rows = all_rows[header_idx + 1:]
 
-    # Create mapping of header names to indices
     header_map = {h: i for i, h in enumerate(headers)}
 
-    # Ensure required fields exist
     required_fields = {"Customer", "Vehicle", "VIN", "Mileage", "Appointment Date", "Rate", "Phone Numbers"}
     if not required_fields.issubset(set(headers)):
         missing = required_fields - set(headers)
-        print(f"Missing required headers: {missing}")
-        sys.exit(1)
+        raise ValueError(f"Missing required headers: {missing}")
 
     seen = set()
     output_rows = []
 
     for row in data_rows:
-        # Pad row if needed
         while len(row) < len(headers):
             row.append("")
 
-        # Extract fields
         customer = (row[header_map.get("Customer", 0)] or "").strip()
         vehicle = (row[header_map.get("Vehicle", 1)] or "").strip()
         vin = (row[header_map.get("VIN", 2)] or "").strip()
@@ -136,11 +117,9 @@ def main() -> None:
         payment = (row[header_map.get("Payment", 9)] or "").strip()
         phone_numbers = (row[header_map.get("Phone Numbers", 11)] or "").strip()
 
-        # Skip rows without vehicle
         if not vehicle or len(vehicle) < 5:
             continue
 
-        # Parse fields
         phone = normalize_phone(phone_numbers)
         first, last = split_name(customer)
         first = first.capitalize() if first else ""
@@ -148,14 +127,11 @@ def main() -> None:
         year_2digit, make, model = parse_vehicle(vehicle)
         appointment, time_24h = parse_datetime(appt_date)
 
-        # Skip if no appointment/time
         if not appointment or not time_24h:
             continue
 
-        # Determine lender (prefer Bank Name, fallback to P/L)
         lender = bank_name if bank_name else p_l
 
-        # Deduplication
         dedup_key = (vin, appointment, time_24h)
         if vin and dedup_key in seen:
             continue
@@ -178,7 +154,7 @@ def main() -> None:
             "Payment": payment,
         })
 
-    # Write output CSV
+    output = StringIO()
     fieldnames = [
         "phone_number",
         "Customer",
@@ -195,14 +171,38 @@ def main() -> None:
         "Lender",
         "Payment",
     ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerows(output_rows)
 
+    return output.getvalue(), len(output_rows)
+
+
+def convert_file(src_path: Path) -> Path:
+    """Convert a CSV file on disk using the shared converter."""
+    content = src_path.read_text(encoding="utf-8-sig")
+    converted_csv, row_count = convert_content(content)
     out_path = src_path.with_name(OUTPUT_NAME)
-    with out_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(output_rows)
+    out_path.write_text(converted_csv, encoding="utf-8")
+    print(f"✓ Wrote {row_count} rows to {out_path}")
+    return out_path
 
-    print(f"✓ Wrote {len(output_rows)} rows to {out_path}")
+
+def main() -> None:
+    if len(sys.argv) != 2:
+        print("Usage: python convert_appointment.py /path/to/Next_Day_Service_Appointment-*.csv")
+        sys.exit(1)
+
+    src_path = Path(sys.argv[1]).expanduser()
+    if not src_path.is_file():
+        print(f"Source file not found: {src_path}")
+        sys.exit(1)
+
+    try:
+        convert_file(src_path)
+    except Exception as exc:  # noqa: BLE001
+        print(f"Conversion failed: {exc}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
