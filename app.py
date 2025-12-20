@@ -7,7 +7,7 @@ from flask import Flask, render_template, request, send_file, jsonify
 from convert_appointment import OUTPUT_NAME, convert_content
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 
 @app.route("/")
@@ -38,7 +38,7 @@ def api_convert():
             as_attachment=True,
             download_name=OUTPUT_NAME,
         )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return jsonify({"error": str(e)}), 400
 
 

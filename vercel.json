@@ -1,14 +1,9 @@
 {
+  "buildCommand": "pip install -r requirements.txt",
+  "outputDirectory": ".",
   "functions": {
     "api/index.py": {
-      "memory": 1024,
-      "maxDuration": 60
+      "runtime": "python3.9"
     }
-  },
-  "rewrites": [
-    { "source": "/", "destination": "/api/index" }
-  ],
-  "env": {
-    "PYTHON_VERSION": "3.11"
   }
 }
